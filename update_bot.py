@@ -21,8 +21,19 @@ def load_data():
     }
 
 def save_data(data):
+    # Ép từng dãy số nằm gọn trên một dòng ngang phẳng lỳ, không bị bẻ dọc
+    formatted_lines = []
+    for game_name, draws in data.items():
+        if not draws:
+            formatted_lines.append(f'    "{game_name}": []')
+        else:
+            draws_str = ",\n        ".join([json.dumps(draw, ensure_ascii=False) for draw in draws])
+            formatted_lines.append(f'    "{game_name}": [\n        {draws_str}\n    ]')
+    
+    final_json = "{\n" + ",\n".join(formatted_lines) + "\n}"
+    
     with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+        f.write(final_json)
 
 GAME_CONFIGS = {
     "MEGA 6/45": 6,
