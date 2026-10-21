@@ -62,6 +62,7 @@ def add_new_draw_safely(game_name, raw_string):
         
     data = load_data()
     if game_name in data:
+        # Kiểm tra nếu chưa có dữ liệu hoặc kết quả mới khác với phần tử đầu tiên (đảm bảo không ghi đè dữ liệu thủ công trùng lặp)
         if not data[game_name] or data[game_name][0] != standardized_result:
             data[game_name].insert(0, standardized_result)
             save_data(data)
@@ -94,12 +95,15 @@ def fetch_result_from_web(game_name):
             
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # Lấy dòng kết quả đầu tiên chứa thông tin kỳ mới nhất trong bảng
-        first_row = soup.find('tr')
-        if not first_row:
-            raw_text_from_web = soup.get_text(separator=" ")
+        # Lọc ra các dòng dữ liệu thực tế (có chứa thẻ <td>), bỏ qua dòng tiêu đề của bảng
+        data_rows = soup.find_all('tr')
+        valid_rows = [row for row in data_rows if row.find('td')]
+        
+        if valid_rows:
+            # Lấy dòng dữ liệu đầu tiên (chính là kỳ quay mới nhất nằm trên cùng)
+            raw_text_from_web = valid_rows[0].get_text(separator=" ")
         else:
-            raw_text_from_web = first_row.get_text(separator=" ")
+            raw_text_from_web = soup.get_text(separator=" ")
         
         return parse_raw_result_string(game_name, raw_text_from_web)
     except Exception as e:
