@@ -1,0 +1,35 @@
+name: Auto Update Lottery Data
+
+on:
+  schedule:
+    # 06:40 UTC (13:40 VN) - Cập nhật Lotto 5/35 trưa
+    - cron: '40 6 * * *'
+    # 11:35 UTC (18:35 VN) - Cập nhật Vietlott & XSKT tối
+    - cron: '35 11 * * *'
+  workflow_dispatch: # Nút bấm chạy thủ công trên GitHub
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install requests beautifulsoup4
+
+      - name: Run update bot
+        run: python update_bot.py
+
+      - name: Commit and push if data changed
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add data.json
+          git diff --quiet && git diff --staged --quiet || (git commit -m "🤖 Auto-update lottery results via Bot" && git push)
