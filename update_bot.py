@@ -21,7 +21,7 @@ def load_data():
     }
 
 def save_data(data):
-    # Ép từng dãy số nằm gọn trên một dòng ngang phẳng lỳ, giữ nguyên form đẹp mắt
+    # Ép từng dãy số nằm gọn trên một dòng ngang phẳng lỳ, giữ form gọn gàng
     formatted_lines = []
     for game_name, draws in data.items():
         if not draws:
@@ -37,10 +37,10 @@ def save_data(data):
 
 GAME_CONFIGS = {
     "MEGA 6/45": 6,
-    "POWER 6/55": 6,  # Lấy đúng 6 số chính, cắt bỏ hoàn toàn số phụ phía sau
+    "POWER 6/55": 6,
     "MAX 3D PRO": 6,
-    "LOTTO 5/35": 6,  # 5 số chính + 1 số đặc biệt ở cuối
-    "XSKT (GĐB)": 6
+    "LOTTO 5/35": 6,
+    "XSKT (GĐB)": 5
 }
 
 def parse_raw_result_string(game_name, raw_string):
@@ -56,7 +56,13 @@ def parse_raw_result_string(game_name, raw_string):
     # Xóa bỏ chuỗi tiền thưởng lớn có dấu chấm
     clean_line = re.sub(r'\d{1,3}(\.\d{3})+', '', clean_line)
     
-    # Quét các số có 2 chữ số từ trái sang phải
+    if game_name == "XSKT (GĐB)":
+        found_numbers = re.findall(r'\b\d{5}\b', clean_line)
+        if found_numbers:
+            number_str = found_numbers[0]
+            return [char for char in number_str]
+    
+    # Quét các số có 2 chữ số từ trái sang phải cho các game Vietlott
     found_numbers = re.findall(r'\b\d{2}\b', clean_line)
     expected_count = GAME_CONFIGS.get(game_name, 6)
 
@@ -73,9 +79,9 @@ def add_new_draw_safely(game_name, raw_string):
         
     data = load_data()
     if game_name in data:
-        # Kiểm tra nếu mảng trống hoặc phần tử CUỐI CÙNG khác với kết quả mới (tránh trùng lặp với dữ liệu thủ công dưới đáy)
+        # Kiểm tra chống trùng lặp với phần tử cuối cùng trong mảng
         if not data[game_name] or data[game_name][-1] != standardized_result:
-            data[game_name].append(standardized_result)  # Dùng append để đẩy kỳ mới xuống cuối mảng
+            data[game_name].append(standardized_result)  # Đẩy kỳ mới xuống cuối mảng
             save_data(data)
             print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ✅ Cập nhật thành công {game_name} (xuống cuối): {standardized_result}")
             return True
@@ -85,20 +91,20 @@ def add_new_draw_safely(game_name, raw_string):
 
 def fetch_result_from_web(game_name):
     try:
-        # Ánh xạ tên game với đường dẫn tương ứng trên ketquadientoan.com
-        game_slugs = {
-            "MEGA 6/45": "tat-ca-ky-xo-so-mega-6-45.html",
-            "POWER 6/55": "tat-ca-ky-xo-so-power-6-55.html",
-            "MAX 3D PRO": "tat-ca-ky-xo-so-max-3d-pro.html",
-            "LOTTO 5/35": "tat-ca-ky-xo-so-lotto-5-35.html",
-            "XSKT (GĐB)": "ket-qua-xo-so-mien-bac.html"
-        }
-        
-        slug = game_slugs.get(game_name)
-        if not slug:
-            return None
+        if game_name == "XSKT (GĐB)":
+            url = "https://xosodaiphat.com/xsmb-xo-so-mien-bac.html"
+        else:
+            game_slugs = {
+                "MEGA 6/45": "tat-ca-ky-xo-so-mega-6-45.html",
+                "POWER 6/55": "tat-ca-ky-xo-so-power-6-55.html",
+                "MAX 3D PRO": "tat-ca-ky-xo-so-max-3d-pro.html",
+                "LOTTO 5/35": "tat-ca-ky-xo-so-lotto-5-35.html"
+            }
+            slug = game_slugs.get(game_name)
+            if not slug:
+                return None
+            url = f"https://www.ketquadientoan.com/{slug}"
             
-        url = f"https://www.ketquadientoan.com/{slug}"
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
         response = requests.get(url, headers=headers, timeout=10)
         if response.status_code != 200:
@@ -106,15 +112,20 @@ def fetch_result_from_web(game_name):
             
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # Lọc ra các dòng dữ liệu thực tế (có chứa thẻ <td>), bỏ qua dòng tiêu đề của bảng
-        data_rows = soup.find_all('tr')
-        valid_rows = [row for row in data_rows if row.find('td')]
-        
-        if valid_rows:
-            # Lấy dòng dữ liệu đầu tiên trên web (kỳ mới nhất)
-            raw_text_from_web = valid_rows[0].get_text(separator=" ")
+        if game_name == "XSKT (GĐB)":
+            # Tím chính xác dòng (tr) chứa G.ĐB trên xosodaiphat.com
+            db_row = soup.find(lambda tag: tag.name == 'tr' and 'G.ĐB' in tag.get_text())
+            if db_row:
+                raw_text_from_web = db_row.get_text(separator=" ")
+            else:
+                raw_text_from_web = soup.get_text(separator=" ")
         else:
-            raw_text_from_web = soup.get_text(separator=" ")
+            data_rows = soup.find_all('tr')
+            valid_rows = [row for row in data_rows if row.find('td')]
+            if valid_rows:
+                raw_text_from_web = valid_rows[0].get_text(separator=" ")
+            else:
+                raw_text_from_web = soup.get_text(separator=" ")
         
         return parse_raw_result_string(game_name, raw_text_from_web)
     except Exception as e:
@@ -136,7 +147,7 @@ def run_scheduled_tasks():
         print("-> Đang kiểm tra lịch quay Max 3D Pro...")
         add_new_draw_safely("MAX 3D PRO", fetch_result_from_web("MAX 3D PRO"))
 
----- # 3. Power 6/55: Thứ 3, 5, 7
+    # 3. Power 6/55: Thứ 3, 5, 7
     if current_weekday in [1, 3, 5]:
         print("-> Đang kiểm tra lịch quay Power 6/55...")
         add_new_draw_safely("POWER 6/55", fetch_result_from_web("POWER 6/55"))
