@@ -11,6 +11,8 @@ on:
 jobs:
   update-data:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Cấp quyền đọc và ghi để bot có thể git push file data.json lên kho thành công
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
