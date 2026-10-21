@@ -55,6 +55,8 @@ async function loadServerData() {
         const response = await fetch('data.json?t=' + new Date().getTime());
         if (response.ok) {
             savedData = await response.json();
+            // Lưu đè trực tiếp dữ liệu mới vào localStorage để đồng bộ, hoàn toàn không đọc ngược lại dữ liệu cũ nữa
+            localStorage.setItem('vietlott_saved_data', JSON.stringify(savedData));
         } else {
             savedData = JSON.parse(localStorage.getItem('vietlott_saved_data')) || {};
         }
