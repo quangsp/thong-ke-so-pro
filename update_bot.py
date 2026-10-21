@@ -1,7 +1,6 @@
 import json
 import os
 import re
-import time
 from datetime import datetime
 import requests
 from bs4 import BeautifulSoup
@@ -29,7 +28,6 @@ GAME_CONFIGS = {
     "MEGA 6/45": 6,
     "POWER 6/55": 6,  # Lấy đúng 6 số chính, cắt bỏ hoàn toàn số phụ phía sau
     "MAX 3D PRO": 6,
-    "KENO": 5,        # Keno chuẩn 5 vị trí
     "LOTTO 5/35": 6,  # 5 số chính + 1 số đặc biệt ở cuối
     "XSKT (GĐB)": 6
 }
@@ -69,6 +67,8 @@ def add_new_draw_safely(game_name, raw_string):
             save_data(data)
             print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ✅ Cập nhật thành công {game_name}: {standardized_result}")
             return True
+        else:
+            print(f"ℹ️ {game_name} đã ở trạng thái mới nhất, không có kỳ quay mới.")
     return False
 
 def fetch_result_from_web(game_name):
@@ -81,7 +81,7 @@ def fetch_result_from_web(game_name):
             
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # (Thay thế đoạn cào HTML thực tế của bạn trả về chuỗi thô)
+        # (Giữ nguyên logic bóc tách HTML thực tế của bạn tại đây)
         raw_text_from_web = "" 
         
         return parse_raw_result_string(game_name, raw_text_from_web)
@@ -89,70 +89,30 @@ def fetch_result_from_web(game_name):
         print(f"Lỗi cào web {game_name}: {e}")
         return None
 
-def smart_update_task(game_name, max_retries=4, delay_minutes=2):
-    print(f"\n[BẮT ĐẦU QUÉT] Đang tìm kết quả mới cho: {game_name} lúc {datetime.now().strftime('%H:%M:%S')}")
+def run_scheduled_tasks():
+    now = datetime.now()
+    current_weekday = now.weekday() # 0: Thứ 2 -> 6: Chủ Nhật
+    print(f"\n🤖 [GITHUB ACTION] Bot bắt đầu quét dữ liệu lúc: {now.strftime('%Y-%m-%d %H:%M:%S')}")
     
-    for attempt in range(1, max_retries + 1):
-        print(f"  -> Lần thử {attempt}/{max_retries}...")
-        result = fetch_result_from_web(game_name)
-        
-        if result:
-            if add_new_draw_safely(game_name, result):
-                print(f"🎉 Đã lấy và cập nhật thành công kết quả mới cho {game_name}!")
-                return True
-        else:
-            print(f"  ⏳ Chưa có kết quả từ nhà đài.")
-        
-        if attempt < max_retries:
-            print(f"  ⏳ Đang chờ {delay_minutes} phút để quét lại...")
-            time.sleep(delay_minutes * 60)
-            
-    print(f"❌ Đã thử {max_retries} lần nhưng nhà đài chưa cập nhật xong kỳ mới cho {game_name}.")
-    return False
+    # 1. Quét XSKT & LOTTO 5/35 (Diễn ra hằng ngày)
+    print("-> Đang kiểm tra XSKT và Lotto 5/35...")
+    add_new_draw_safely("XSKT (GĐB)", fetch_result_from_web("XSKT (GĐB)"))
+    add_new_draw_safely("LOTTO 5/35", fetch_result_from_web("LOTTO 5/35"))
+    
+    # 2. Max 3D Pro: Thứ 2, 4, 6
+    if current_weekday in [0, 2, 4]:
+        print("-> Đang kiểm tra lịch quay Max 3D Pro...")
+        add_new_draw_safely("MAX 3D PRO", fetch_result_from_web("MAX 3D PRO"))
+
+    # 3. Power 6/55: Thứ 3, 5, 7
+    if current_weekday in [1, 3, 5]:
+        print("-> Đang kiểm tra lịch quay Power 6/55...")
+        add_new_draw_safely("POWER 6/55", fetch_result_from_web("POWER 6/55"))
+
+    # 4. Mega 6/45: Thứ 4, 6, Chủ Nhật
+    if current_weekday in [2, 4, 6]:
+        print("-> Đang kiểm tra lịch quay Mega 6/45...")
+        add_new_draw_safely("MEGA 6/45", fetch_result_from_web("MEGA 6/45"))
 
 if __name__ == "__main__":
-    print("🤖 Bot tự động quét lặp lại liên tục đã khởi động an toàn!")
-    
-    last_keno_minute = -1
-    
-    while True:
-        now = datetime.now()
-        current_time_str = now.strftime("%H:%M")
-        current_minute = now.minute
-        current_weekday = now.weekday() # 0: Thứ 2 -> 6: Chủ Nhật
-        
-        # 1. KENO: Quay liên tục cả ngày (Quét mỗi 10 phút)
-        if current_minute % 10 == 0 and current_minute != last_keno_minute:
-            smart_update_task("KENO", max_retries=2, delay_minutes=1)
-            last_keno_minute = current_minute
-
-        # 2. LOTTO 5/35: Quay 2 lần/ngày (Trưa và Tối)
-        elif current_time_str in ["13:30", "13:35"]:
-            smart_update_task("LOTTO 5/35", max_retries=3, delay_minutes=2)
-            time.sleep(60)
-        elif current_time_str in ["21:30", "21:35"]:
-            smart_update_task("LOTTO 5/35", max_retries=3, delay_minutes=2)
-            time.sleep(60)
-
-        # 3. XSKT: Quét dồn các mốc sau 18:30 (18:35, 18:38, 18:41)
-        elif current_time_str in ["18:35", "18:38", "18:41"]:
-            smart_update_task("XSKT (GĐB)", max_retries=3, delay_minutes=2)
-            time.sleep(60)
-
-        # 4. KHUNG GIỜ VÀNG CÁC GAME VIETLOTT (Quay lúc 18:30 -> Bot quét từ 18:35 lặp liên tục)
-        # Max 3D Pro: Thứ 2, 4, 6
-        elif current_weekday in [0, 2, 4] and current_time_str in ["18:35", "18:38", "18:41"]:
-            smart_update_task("MAX 3D PRO", max_retries=3, delay_minutes=2)
-            time.sleep(60)
-
-        # Power 6/55: Thứ 3, 5, 7
-        elif current_weekday in [1, 3, 5] and current_time_str in ["18:35", "18:38", "18:41"]:
-            smart_update_task("POWER 6/55", max_retries=3, delay_minutes=2)
-            time.sleep(60)
-
-        # Mega 6/45: Thứ 4, 6, Chủ Nhật
-        elif current_weekday in [2, 4, 6] and current_time_str in ["18:35", "18:38", "18:41"]:
-            smart_update_task("MEGA 6/45", max_retries=3, delay_minutes=2)
-            time.sleep(60)
-
-        time.sleep(20)
+    run_scheduled_tasks()
