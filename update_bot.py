@@ -73,7 +73,20 @@ def add_new_draw_safely(game_name, raw_string):
 
 def fetch_result_from_web(game_name):
     try:
-        url = "https://www.minhngoc.net.vn/"
+        # Ánh xạ tên game với đường dẫn tương ứng trên ketquadientoan.com
+        game_slugs = {
+            "MEGA 6/45": "tat-ca-ky-xo-so-mega-6-45.html",
+            "POWER 6/55": "tat-ca-ky-xo-so-power-6-55.html",
+            "MAX 3D PRO": "tat-ca-ky-xo-so-max-3d-pro.html",
+            "LOTTO 5/35": "tat-ca-ky-xo-so-lotto-5-35.html",
+            "XSKT (GĐB)": "ket-qua-xo-so-mien-bac.html"
+        }
+        
+        slug = game_slugs.get(game_name)
+        if not slug:
+            return None
+            
+        url = f"https://www.ketquadientoan.com/{slug}"
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
         response = requests.get(url, headers=headers, timeout=10)
         if response.status_code != 200:
@@ -81,8 +94,12 @@ def fetch_result_from_web(game_name):
             
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # (Giữ nguyên logic bóc tách HTML thực tế của bạn tại đây)
-        raw_text_from_web = "" 
+        # Lấy dòng kết quả đầu tiên chứa thông tin kỳ mới nhất trong bảng
+        first_row = soup.find('tr')
+        if not first_row:
+            raw_text_from_web = soup.get_text(separator=" ")
+        else:
+            raw_text_from_web = first_row.get_text(separator=" ")
         
         return parse_raw_result_string(game_name, raw_text_from_web)
     except Exception as e:
