@@ -21,7 +21,7 @@ def load_data():
     }
 
 def save_data(data):
-    # Ép từng dãy số nằm gọn trên một dòng ngang phẳng lỳ, không bị bẻ dọc
+    # Ép từng dãy số nằm gọn trên một dòng ngang phẳng lỳ, giữ nguyên form đẹp mắt
     formatted_lines = []
     for game_name, draws in data.items():
         if not draws:
@@ -73,11 +73,11 @@ def add_new_draw_safely(game_name, raw_string):
         
     data = load_data()
     if game_name in data:
-        # Kiểm tra nếu chưa có dữ liệu hoặc kết quả mới khác với phần tử đầu tiên (đảm bảo không ghi đè dữ liệu thủ công trùng lặp)
-        if not data[game_name] or data[game_name][0] != standardized_result:
-            data[game_name].insert(0, standardized_result)
+        # Kiểm tra nếu mảng trống hoặc phần tử CUỐI CÙNG khác với kết quả mới (tránh trùng lặp với dữ liệu thủ công dưới đáy)
+        if not data[game_name] or data[game_name][-1] != standardized_result:
+            data[game_name].append(standardized_result)  # Dùng append để đẩy kỳ mới xuống cuối mảng
             save_data(data)
-            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ✅ Cập nhật thành công {game_name}: {standardized_result}")
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ✅ Cập nhật thành công {game_name} (xuống cuối): {standardized_result}")
             return True
         else:
             print(f"ℹ️ {game_name} đã ở trạng thái mới nhất, không có kỳ quay mới.")
@@ -111,7 +111,7 @@ def fetch_result_from_web(game_name):
         valid_rows = [row for row in data_rows if row.find('td')]
         
         if valid_rows:
-            # Lấy dòng dữ liệu đầu tiên (chính là kỳ quay mới nhất nằm trên cùng)
+            # Lấy dòng dữ liệu đầu tiên trên web (kỳ mới nhất)
             raw_text_from_web = valid_rows[0].get_text(separator=" ")
         else:
             raw_text_from_web = soup.get_text(separator=" ")
@@ -136,7 +136,7 @@ def run_scheduled_tasks():
         print("-> Đang kiểm tra lịch quay Max 3D Pro...")
         add_new_draw_safely("MAX 3D PRO", fetch_result_from_web("MAX 3D PRO"))
 
-    # 3. Power 6/55: Thứ 3, 5, 7
+---- # 3. Power 6/55: Thứ 3, 5, 7
     if current_weekday in [1, 3, 5]:
         print("-> Đang kiểm tra lịch quay Power 6/55...")
         add_new_draw_safely("POWER 6/55", fetch_result_from_web("POWER 6/55"))
